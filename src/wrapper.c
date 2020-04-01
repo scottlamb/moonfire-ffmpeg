@@ -1,6 +1,4 @@
-// Copyright (C) 2017-2020 Scott Lamb <slamb@slamb.org>
-// SPDX-License-Identifier: MIT OR Apache-2.0
-// vim: set sw=4 et:
+// Copyright (C) 2017-2020 Scott Lamb <slamb@slamb.org> // SPDX-License-Identifier: MIT OR Apache-2.0 // vim: set sw=4 et:
 
 #include <libavcodec/avcodec.h>
 #include <libavcodec/version.h>
@@ -14,9 +12,11 @@
 #include <libswscale/swscale.h>
 #include <libswscale/version.h>
 #endif
+#include <assert.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 const int moonfire_ffmpeg_compiled_libavcodec_version = LIBAVCODEC_VERSION_INT;
 const int moonfire_ffmpeg_compiled_libavformat_version = LIBAVFORMAT_VERSION_INT;
@@ -36,13 +36,20 @@ const int moonfire_ffmpeg_avmedia_type_video = AVMEDIA_TYPE_VIDEO;
 const int moonfire_ffmpeg_av_codec_id_h264 = AV_CODEC_ID_H264;
 
 const int moonfire_ffmpeg_averror_decoder_not_found = AVERROR_DECODER_NOT_FOUND;
+const int moonfire_ffmpeg_averror_invalid_data = AVERROR_INVALIDDATA;
 const int moonfire_ffmpeg_averror_eof = AVERROR_EOF;
 const int moonfire_ffmpeg_averror_enomem = AVERROR(ENOMEM);
+const int moonfire_ffmpeg_averror_enosys = AVERROR(ENOSYS);
 const int moonfire_ffmpeg_averror_unknown = AVERROR_UNKNOWN;
 
 const int moonfire_ffmpeg_pix_fmt_rgb24 = AV_PIX_FMT_RGB24;
 const int moonfire_ffmpeg_pix_fmt_bgr24 = AV_PIX_FMT_BGR24;
 
+const int moonfire_ffmpeg_avseek_force = AVSEEK_FORCE;
+const int moonfire_ffmpeg_avseek_size = AVSEEK_SIZE;
+const int moonfire_ffmpeg_seek_set = SEEK_SET;
+const int moonfire_ffmpeg_seek_cur = SEEK_CUR;
+const int moonfire_ffmpeg_seek_end = SEEK_END;
 
 // Prior to libavcodec 58.9.100, multithreaded callers were expected to supply
 // a lock callback. That release deprecated this API. It also introduced a
@@ -134,6 +141,15 @@ struct moonfire_ffmpeg_streams moonfire_ffmpeg_fctx_streams(AVFormatContext *ctx
 
 int moonfire_ffmpeg_fctx_open_write(AVFormatContext *ctx, const char *url) {
     return avio_open(&ctx->pb, url, AVIO_FLAG_WRITE);
+}
+
+void moonfire_ffmpeg_fctx_set_pb(AVFormatContext *ctx, AVIOContext *pb) {
+    assert(ctx->pb == NULL);
+    ctx->pb = pb;
+}
+
+void moonfire_ffmpeg_ioctx_set_direct(AVIOContext *pb) {
+    pb->direct = 1;
 }
 
 void moonfire_ffmpeg_cctx_params(const AVCodecContext *ctx, struct VideoParameters *p) {

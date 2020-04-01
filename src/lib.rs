@@ -128,9 +128,6 @@ impl Ffmpeg {
 
 #[cfg(test)]
 mod tests {
-    use super::Error;
-    use std::ffi::CString;
-
     /// Just tests that this doesn't crash with an ABI compatibility error.
     #[test]
     fn test_init() {

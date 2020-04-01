@@ -26,6 +26,28 @@ extern "C" {
     fn av_frame_alloc() -> *mut AVFrame;
     fn av_frame_free(f: *mut *mut AVFrame);
     fn av_get_pix_fmt_name(fmt: libc::c_int) -> *const libc::c_char;
+    fn av_malloc(len: usize) -> *mut libc::c_void;
+    fn av_free(ptr: *mut libc::c_void);
+}
+
+pub(crate) struct Alloc(ptr::NonNull<libc::c_void>);
+
+impl Alloc {
+    pub(crate) fn new(len: usize) -> Result<Self, Error> {
+        Ok(Alloc(
+            ptr::NonNull::new(unsafe { av_malloc(len) }).ok_or_else(Error::enomem)?,
+        ))
+    }
+
+    pub(crate) fn as_ptr(&mut self) -> *mut libc::c_void {
+        self.0.as_ptr()
+    }
+}
+
+impl Drop for Alloc {
+    fn drop(&mut self) {
+        unsafe { av_free(self.0.as_ptr()) }
+    }
 }
 
 //#[link(name = "wrapper")]
@@ -36,7 +58,9 @@ extern "C" {
 
     static moonfire_ffmpeg_averror_eof: libc::c_int;
     static moonfire_ffmpeg_averror_enomem: libc::c_int;
+    static moonfire_ffmpeg_averror_enosys: libc::c_int;
     static moonfire_ffmpeg_averror_decoder_not_found: libc::c_int;
+    static moonfire_ffmpeg_averror_invalid_data: libc::c_int;
     static moonfire_ffmpeg_averror_unknown: libc::c_int;
 
     static moonfire_ffmpeg_avmedia_type_video: libc::c_int;
@@ -218,11 +242,17 @@ impl Error {
     pub fn enomem() -> Self {
         Error(unsafe { moonfire_ffmpeg_averror_enomem })
     }
+    pub fn enosys() -> Self {
+        Error(unsafe { moonfire_ffmpeg_averror_enosys })
+    }
     pub fn unknown() -> Self {
         Error(unsafe { moonfire_ffmpeg_averror_unknown })
     }
     pub fn decoder_not_found() -> Self {
         Error(unsafe { moonfire_ffmpeg_averror_decoder_not_found })
+    }
+    pub fn invalid_data() -> Self {
+        Error(unsafe { moonfire_ffmpeg_averror_invalid_data })
     }
 
     /// Wraps the given return code as a Result: positive values are propagated through; negative
@@ -232,6 +262,11 @@ impl Error {
             return Err(Error(raw));
         }
         Ok(raw)
+    }
+
+    /// Returns the error value, which is guaranteed to be < 0.
+    pub(crate) fn get(self) -> libc::c_int {
+        self.0
     }
 
     pub fn is_eof(self) -> bool {
