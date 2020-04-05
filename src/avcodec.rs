@@ -67,10 +67,22 @@ extern "C" {
 }
 
 // No ABI stability assumption here; use heap allocation/deallocation and accessors only.
-enum AVCodec {}
-pub enum AVCodecContext {}
-pub enum AVCodecParameters {}
-pub(crate) enum AVPacket {}
+#[repr(C)]
+struct AVCodec {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct AVCodecContext {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct AVCodecParameters {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub(crate) struct AVPacket {
+    _private: [u8; 0],
+}
 
 impl AVCodecContext {
     pub fn width(&self) -> libc::c_int {

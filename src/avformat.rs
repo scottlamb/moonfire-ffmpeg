@@ -93,10 +93,22 @@ extern "C" {
 }
 
 // No ABI stability assumption here; use heap allocation/deallocation and accessors only.
-enum AVFormatContext {}
-enum AVIOContext {}
-enum AVInputFormat {}
-enum AVStream {}
+#[repr(C)]
+struct AVFormatContext {
+    _private: [u8; 0],
+}
+#[repr(C)]
+struct AVIOContext {
+    _private: [u8; 0],
+}
+#[repr(C)]
+struct AVInputFormat {
+    _private: [u8; 0],
+}
+#[repr(C)]
+struct AVStream {
+    _private: [u8; 0],
+}
 
 pub struct InputFormatContext<'a> {
     /// When using `InputFormatContext::with_io_context`, `ctx` has a `pb` member which has an

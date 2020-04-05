@@ -92,8 +92,14 @@ pub struct Rational {
 }
 
 // No ABI stability assumption here; use heap allocation/deallocation and accessors only.
-enum AVDictionary {}
-pub(crate) enum AVFrame {}
+#[repr(C)]
+struct AVDictionary {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub(crate) struct AVFrame {
+    _private: [u8; 0],
+}
 
 #[repr(C)]
 pub(crate) struct FrameStuff {

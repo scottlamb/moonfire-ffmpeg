@@ -39,8 +39,14 @@ extern "C" {
     static moonfire_ffmpeg_sws_bilinear: libc::c_int;
 }
 
-enum SwsContext {}
-enum SwsFilter {}
+#[repr(C)]
+struct SwsContext {
+    _private: [u8; 0],
+}
+#[repr(C)]
+struct SwsFilter {
+    _private: [u8; 0],
+}
 
 pub struct Scaler {
     ctx: ptr::NonNull<SwsContext>,
