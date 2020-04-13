@@ -409,7 +409,7 @@ impl<'a> InputFormatContext<'a> {
         Ok(Packet(pkt))
     }
 
-    pub fn streams(&self) -> Streams<'_> {
+    pub fn streams(&self) -> Streams {
         Streams(unsafe {
             let s = moonfire_ffmpeg_fctx_streams(self.ctx);
             std::slice::from_raw_parts(s.streams, s.len as usize)
@@ -452,7 +452,7 @@ impl<'owner> Streams<'owner> {
 pub struct InputStream<'o>(&'o AVStream);
 
 impl<'o> InputStream<'o> {
-    pub fn codecpar(&self) -> InputCodecParameters<'_> {
+    pub fn codecpar(&self) -> InputCodecParameters<'o> {
         InputCodecParameters(unsafe { moonfire_ffmpeg_stream_codecpar(self.0).as_ref() }.unwrap())
     }
 
