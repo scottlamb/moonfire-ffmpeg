@@ -18,6 +18,7 @@ extern "C" {
         got_picture_ptr: *mut libc::c_int,
         pkt: *const AVPacket,
     ) -> libc::c_int;
+    fn avcodec_get_name(codec_id: libc::c_int) -> *const libc::c_char;
     fn avcodec_find_decoder(codec_id: libc::c_int) -> *const AVCodec;
     fn avcodec_find_encoder(codec_id: libc::c_int) -> *const AVCodec;
     fn avcodec_free_context(ctx: *mut *mut AVCodecContext);
@@ -38,6 +39,7 @@ extern "C" {
 extern "C" {
     pub(crate) static moonfire_ffmpeg_compiled_libavcodec_version: libc::c_int;
 
+    static moonfire_ffmpeg_av_codec_id_aac: libc::c_int;
     static moonfire_ffmpeg_av_codec_id_h264: libc::c_int;
 
     fn moonfire_ffmpeg_codecpar_codec_id(ctx: *const AVCodecParameters) -> CodecId;
@@ -217,11 +219,15 @@ impl<'s> std::ops::Deref for InputCodecParameters<'s> {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 #[repr(transparent)]
 pub struct CodecId(libc::c_int);
 
 impl CodecId {
+    pub fn is_aac(self) -> bool {
+        self.0 == unsafe { moonfire_ffmpeg_av_codec_id_aac }
+    }
+
     pub fn is_h264(self) -> bool {
         self.0 == unsafe { moonfire_ffmpeg_av_codec_id_h264 }
     }
@@ -234,6 +240,20 @@ impl CodecId {
     pub fn find_encoder(self) -> Option<Encoder> {
         // avcodec_find_encoder returns an AVCodec which lives forever.
         unsafe { avcodec_find_encoder(self.0).as_ref() }.map(|e| Encoder(e))
+    }
+}
+
+impl std::fmt::Debug for CodecId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "CodecId({} /* {} */)", self.0, self)
+    }
+}
+
+impl std::fmt::Display for CodecId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let s = unsafe { std::ffi::CStr::from_ptr(avcodec_get_name(self.0)) };
+        let s = s.to_str().map_err(|_| std::fmt::Error)?;
+        std::fmt::Display::fmt(s, f)
     }
 }
 

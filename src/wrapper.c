@@ -31,8 +31,11 @@ const int moonfire_ffmpeg_av_dict_ignore_suffix = AV_DICT_IGNORE_SUFFIX;
 
 const int64_t moonfire_ffmpeg_av_nopts_value = AV_NOPTS_VALUE;
 
+const int moonfire_ffmpeg_avmedia_type_audio = AVMEDIA_TYPE_AUDIO;
+const int moonfire_ffmpeg_avmedia_type_data = AVMEDIA_TYPE_DATA;
 const int moonfire_ffmpeg_avmedia_type_video = AVMEDIA_TYPE_VIDEO;
 
+const int moonfire_ffmpeg_av_codec_id_aac = AV_CODEC_ID_AAC;
 const int moonfire_ffmpeg_av_codec_id_h264 = AV_CODEC_ID_H264;
 
 const int moonfire_ffmpeg_averror_decoder_not_found = AVERROR_DECODER_NOT_FOUND;

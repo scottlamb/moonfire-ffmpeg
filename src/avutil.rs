@@ -63,6 +63,8 @@ extern "C" {
     static moonfire_ffmpeg_averror_invalid_data: libc::c_int;
     static moonfire_ffmpeg_averror_unknown: libc::c_int;
 
+    static moonfire_ffmpeg_avmedia_type_audio: libc::c_int;
+    static moonfire_ffmpeg_avmedia_type_data: libc::c_int;
     static moonfire_ffmpeg_avmedia_type_video: libc::c_int;
 
     static moonfire_ffmpeg_pix_fmt_rgb24: libc::c_int;
@@ -124,6 +126,14 @@ pub struct VideoParameters {
 pub struct MediaType(libc::c_int);
 
 impl MediaType {
+    pub fn is_audio(self) -> bool {
+        self.0 == unsafe { moonfire_ffmpeg_avmedia_type_audio }
+    }
+
+    pub fn is_data(self) -> bool {
+        self.0 == unsafe { moonfire_ffmpeg_avmedia_type_data }
+    }
+
     pub fn is_video(self) -> bool {
         self.0 == unsafe { moonfire_ffmpeg_avmedia_type_video }
     }
