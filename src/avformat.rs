@@ -467,7 +467,7 @@ impl<'o> InputStream<'o> {
 
 #[cfg(test)]
 mod test {
-    use cstr::*;
+    use cstr::cstr;
 
     fn with_packets<F>(ctx: &mut super::InputFormatContext, mut f: F)
     where

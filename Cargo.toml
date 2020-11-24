@@ -13,10 +13,10 @@ swscale = []
 [dependencies]
 libc = "0.2.69"
 log = { version = "0.4.8", features = ["release_max_level_info"] }
-parking_lot = { version = "0.10.2", features = [] }
+parking_lot = { version = "0.11.1", features = [] }
 
 [dev-dependencies]
-cstr = "0.1.7"
+cstr = "0.2.5"
 
 [build-dependencies]
 cc = "1.0.50"
