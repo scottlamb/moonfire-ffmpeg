@@ -1,7 +1,8 @@
-// Copyright (C) 2017-2020 Scott Lamb <slamb@slamb.org>
+// Copyright (C) 2021 Scott Lamb <slamb@slamb.org>
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 fn main() {
+    println!("cargo:rerun-if-changed=src/wrapper.c");
     let libraries = [
         pkg_config::Config::new()
             .atleast_version("54.1")

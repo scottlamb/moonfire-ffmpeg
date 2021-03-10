@@ -1,9 +1,10 @@
-// Copyright (C) 2017-2020 Scott Lamb <slamb@slamb.org>
+// Copyright (C) 2021 Scott Lamb <slamb@slamb.org>
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use libc::{c_char, c_int};
 use log::info;
 use parking_lot::Once;
-use std::fmt::{self, Write};
+use std::{convert::TryInto, ffi::CStr, fmt::{self, Write}, mem::MaybeUninit};
 
 static START: Once = Once::new();
 
@@ -15,9 +16,19 @@ pub mod swscale;
 
 pub use avutil::Error;
 
+type RustLogCallback = extern "C" fn(
+    avc_item_name: *const c_char,
+    avc: *const libc::c_void,
+    level: libc::c_int,
+    fmt: *const c_char,
+    vl: *mut libc::c_void);
+
 //#[link(name = "wrapper")]
 extern "C" {
-    fn moonfire_ffmpeg_init();
+    fn moonfire_ffmpeg_init(cb: RustLogCallback);
+
+    fn moonfire_ffmpeg_vsnprintf(buf: *mut u8, size: usize,
+                                 fmt: *const c_char, vl: *mut libc::c_void) -> c_int;
 }
 
 pub struct Ffmpeg {}
@@ -77,6 +88,69 @@ impl fmt::Display for Library {
     }
 }
 
+/// Log callback which sends `av_log_default_callback`-like payloads into the
+/// log crate, turning ffmpeg's `avc_item_name` into a module path and ffmpeg's
+/// levels into log crate levels.
+extern "C" fn log_callback(
+    avc_item_name: *const c_char,
+    avc: *const libc::c_void,
+    level: libc::c_int,
+    fmt: *const c_char,
+    vl: *mut libc::c_void) {
+    let log_level = avutil::convert_level(level);
+
+    // Fast path so trace calls don't allocate when trace isn't enabled anywhere.
+    if log::max_level().to_level().map(|l| l < log_level).unwrap_or(true) {
+        return;
+    }
+    let avc_item_name = if avc_item_name.is_null() {
+        "null"
+    } else {
+        unsafe { CStr::from_ptr(avc_item_name) }.to_str().unwrap_or("bad_utf8")
+    };
+    let target = format!("moonfire_ffmpeg::{}", avc_item_name);
+    let metadata = log::Metadata::builder()
+        .level(avutil::convert_level(level))
+        .target(&target)
+        .build();
+    let logger = log::logger();
+    if !logger.enabled(&metadata) {
+        return;
+    }
+    let mut buf: [MaybeUninit<u8>; 1024] = unsafe { MaybeUninit::uninit().assume_init() };
+    let buf = unsafe {
+        let ret = moonfire_ffmpeg_vsnprintf(buf[0].as_mut_ptr(), buf.len(), fmt, vl);
+        std::slice::from_raw_parts_mut(
+            buf[0].as_mut_ptr(),
+            std::cmp::min(ret.try_into().unwrap(), buf.len() - 1))
+    };
+
+    // ffmpeg log lines apparently sometimes have these low-ASCII control characters.
+    // av_log_default_callback "sanitizes" them; match its behavior.
+    for c in buf.iter_mut() {
+        if *c < 0x08 || (*c > 0x0D && *c < 0x20) {
+            *c = b'?';
+        }
+    }
+
+    // av_log calls aren't quite one-to-one with log lines. If they don't have
+    // a trailing newline, the following call gets appended on the same line
+    // with no prefix. This is a not-very-threadsafe behavior and doesn't seem
+    // to come up much in practice. Just treat them all as individual log lines
+    // for now, stripping off the trailing newline if it's present (usually).
+    let mut buf: &[u8] = buf;
+    if buf.last().map(|&b| b == b'\r' || b == b'\n').unwrap_or(false) {
+        buf = &buf[0..buf.len()-1];
+    }
+
+    let buf = String::from_utf8_lossy(buf);
+    logger.log(&log::RecordBuilder::new()
+        .args(format_args!("{:?}: {}", avc, buf))
+        .metadata(metadata)
+        .module_path(Some(&target))
+        .build());
+}
+
 impl Ffmpeg {
     pub fn new() -> Ffmpeg {
         START.call_once(|| unsafe {
@@ -115,7 +189,7 @@ impl Ffmpeg {
             if !compatible {
                 panic!("Incompatible ffmpeg versions:{}", msg);
             }
-            moonfire_ffmpeg_init();
+            moonfire_ffmpeg_init(log_callback);
             avformat::av_register_all();
             if avformat::avformat_network_init() < 0 {
                 panic!("avformat_network_init failed");

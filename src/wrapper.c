@@ -1,4 +1,6 @@
-// Copyright (C) 2017-2020 Scott Lamb <slamb@slamb.org> // SPDX-License-Identifier: MIT OR Apache-2.0 // vim: set sw=4 et:
+// Copyright (C) 2021 Scott Lamb <slamb@slamb.org>
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// vim: set sw=4 et:
 
 #include <libavcodec/avcodec.h>
 #include <libavcodec/version.h>
@@ -7,6 +9,7 @@
 #include <libavutil/avutil.h>
 #include <libavutil/dict.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/log.h>
 #include <libavutil/version.h>
 #ifdef MOONFIRE_USE_SWSCALE
 #include <libswscale/swscale.h>
@@ -14,6 +17,7 @@
 #endif
 #include <assert.h>
 #include <pthread.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -53,6 +57,15 @@ const int moonfire_ffmpeg_avseek_size = AVSEEK_SIZE;
 const int moonfire_ffmpeg_seek_set = SEEK_SET;
 const int moonfire_ffmpeg_seek_cur = SEEK_CUR;
 const int moonfire_ffmpeg_seek_end = SEEK_END;
+
+typedef void (*RustLogCallback)(
+    const char *avc_item_name,
+    void *avc,
+    int level,
+    const char *fmt,
+    void *vl);
+
+static RustLogCallback rust_log_callback;
 
 // Prior to libavcodec 58.9.100, multithreaded callers were expected to supply
 // a lock callback. That release deprecated this API. It also introduced a
@@ -98,12 +111,48 @@ static int lock_callback(void **mutex, enum AVLockOp op) {
 }
 #endif
 
-void moonfire_ffmpeg_init(void) {
+// Wrap the va_list in a structure because va_list is (on some platforms)
+// an array, and this covers up C's annoying habit of treating arrays as
+// pointers even when they're supposedly opaque types.
+struct my_va_list {
+    va_list v;
+};
+
+static void log_callback(void *avcl, int level, const char *fmt, va_list vl) {
+    // avcl is (according to av_log_default_callback's docstring) "a pointer
+    // to an arbitrary struct of which the first field is a pointer to an
+    // AVClass struct". The av_log_default_callback is defensive to both avcl
+    // itself and the AVClass being NULL; match that.
+    AVClass *avc = (avcl == NULL) ? NULL : *(AVClass **)avcl;
+    const char *avc_item_name = (avc == NULL) ? NULL : avc->item_name(avcl);
+
+    // av_log_default_callback also looks up a parent, but it looks like that's
+    // rarely supplied. Skip it for now.
+
+    struct my_va_list v;
+    va_copy(v.v, vl);
+    va_end(vl);
+    rust_log_callback(
+        avc_item_name,
+        avcl,
+        level,
+        fmt,
+        &v);
+}
+
+int moonfire_ffmpeg_vsnprintf(char *buf, size_t size, const char *fmt,
+                              struct my_va_list *vl) {
+    return vsnprintf(buf, size, fmt, vl->v);
+}
+
+void moonfire_ffmpeg_init(RustLogCallback cb) {
 #ifndef FF_API_LOCKMGR
     if (av_lockmgr_register(&lock_callback) < 0) {
         abort();
     }
 #endif
+    rust_log_callback = cb;
+    av_log_set_callback(&log_callback);
 }
 
 struct moonfire_ffmpeg_streams {

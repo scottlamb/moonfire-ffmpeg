@@ -17,6 +17,7 @@ parking_lot = { version = "0.11.1", features = [] }
 
 [dev-dependencies]
 cstr = "0.2.5"
+mylog = { git = "https://github.com/scottlamb/mylog" }
 
 [build-dependencies]
 cc = "1.0.50"

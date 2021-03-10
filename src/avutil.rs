@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2020 Scott Lamb <slamb@slamb.org>
+// Copyright (C) 2021 Scott Lamb <slamb@slamb.org>
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::convert::TryFrom;
@@ -382,6 +382,32 @@ pub struct ImageDimensions {
 impl std::fmt::Display for ImageDimensions {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}x{}/{}", self.width, self.height, self.pix_fmt)
+    }
+}
+
+// const AV_LOG_PANIC: libc::c_int = 0;
+// const AV_LOG_FATAL: libc::c_int = 8;
+const AV_LOG_ERROR: libc::c_int = 16;
+const AV_LOG_WARNING: libc::c_int = 24;
+const AV_LOG_INFO: libc::c_int = 32;
+// const AV_LOG_VERBOSE: libc::c_int = 40;
+const AV_LOG_DEBUG: libc::c_int = 48;
+// const AV_LOG_TRACE: libc::c_int = 56;
+
+pub(crate) fn convert_level(level: libc::c_int) -> log::Level {
+    // Match av_log_default_callback.
+    let level = if level >= 0 { level & 0xFF } else { level };
+
+    if level <= AV_LOG_ERROR {
+        log::Level::Error
+    } else if level <= AV_LOG_WARNING {
+        log::Level::Warn
+    } else if level <= AV_LOG_INFO {
+        log::Level::Info
+    } else if level <= AV_LOG_DEBUG {
+        log::Level::Debug
+    } else {
+        log::Level::Trace
     }
 }
 
