@@ -247,6 +247,10 @@ impl Ffmpeg {
 
 #[cfg(test)]
 mod tests {
+    use crate::avutil;
+    use cstr::*;
+    use parking_lot::Mutex;
+
     /// Just tests that this doesn't crash with an ABI compatibility error.
     #[test]
     fn test_init() {
@@ -273,9 +277,46 @@ mod tests {
                 "avutil",
                 (t.0 << 16) | (t.1 << 8) | t.2,
                 (t.3 << 16) | (t.4 << 8) | t.5,
-                std::ffi::CStr::from_bytes_with_nul(&[0]).unwrap(),
+                cstr!(""),
             );
             assert!(l.is_compatible() == t.6, "{} expected={}", l, t.6);
         }
+    }
+
+    struct DummyLogger(Mutex<Vec<String>>);
+
+    impl log::Log for DummyLogger {
+        fn enabled(&self, _metadata: &log::Metadata) -> bool {
+            true
+        }
+        fn log(&self, record: &log::Record) {
+            let mut l = self.0.lock();
+            l.push(format!(
+                "{}: {}: {}",
+                record.level(),
+                record.target(),
+                record.args()
+            ));
+        }
+        fn flush(&self) {}
+    }
+
+    #[test]
+    fn test_logging() {
+        super::Ffmpeg::new();
+        let logger = Box::leak(Box::new(DummyLogger(Mutex::new(Vec::new()))));
+        log::set_logger(logger).unwrap();
+        log::set_max_level(log::LevelFilter::Trace);
+        unsafe {
+            avutil::av_log(
+                std::ptr::null(),
+                avutil::AV_LOG_INFO,
+                cstr!("foo %d\n").as_ptr(),
+                1,
+            );
+        };
+        let l = logger.0.lock();
+        assert_eq!(l.len(), 1);
+        assert_eq!(&l[0][..], "INFO: moonfire_ffmpeg::null: 0x0: foo 1");
     }
 }

@@ -134,13 +134,13 @@ static void log_callback(void *avcl, int level, const char *fmt, va_list vl) {
 
     struct my_va_list v;
     va_copy(v.v, vl);
-    va_end(vl);
     rust_log_callback(
         avc_item_name,
         avcl,
         level,
         fmt,
         &v);
+    va_end(v.v);
 }
 
 int moonfire_ffmpeg_vsnprintf(char *buf, size_t size, const char *fmt,

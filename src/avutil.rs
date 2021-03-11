@@ -10,6 +10,15 @@ extern "C" {
     pub(crate) fn av_version_info() -> *mut libc::c_char;
     pub(crate) fn avutil_version() -> libc::c_int;
     pub(crate) fn avutil_configuration() -> *mut libc::c_char;
+
+    #[cfg(test)]
+    pub(crate) fn av_log(
+        avcl: *const libc::c_void,
+        level: libc::c_int,
+        fmt: *const libc::c_char,
+        ...
+    );
+
     fn av_strerror(e: libc::c_int, b: *mut libc::c_char, s: libc::size_t) -> libc::c_int;
     fn av_dict_count(d: *const AVDictionary) -> libc::c_int;
     fn av_dict_get(
@@ -389,11 +398,11 @@ impl std::fmt::Display for ImageDimensions {
 
 // const AV_LOG_PANIC: libc::c_int = 0;
 // const AV_LOG_FATAL: libc::c_int = 8;
-const AV_LOG_ERROR: libc::c_int = 16;
-const AV_LOG_WARNING: libc::c_int = 24;
-const AV_LOG_INFO: libc::c_int = 32;
+pub(crate) const AV_LOG_ERROR: libc::c_int = 16;
+pub(crate) const AV_LOG_WARNING: libc::c_int = 24;
+pub(crate) const AV_LOG_INFO: libc::c_int = 32;
 // const AV_LOG_VERBOSE: libc::c_int = 40;
-const AV_LOG_DEBUG: libc::c_int = 48;
+pub(crate) const AV_LOG_DEBUG: libc::c_int = 48;
 // const AV_LOG_TRACE: libc::c_int = 56;
 
 pub(crate) fn convert_level(level: libc::c_int) -> log::Level {
