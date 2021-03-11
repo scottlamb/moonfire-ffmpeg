@@ -7,7 +7,9 @@ use std::ptr;
 
 //#[link(name = "avutil")]
 extern "C" {
+    pub(crate) fn av_version_info() -> *mut libc::c_char;
     pub(crate) fn avutil_version() -> libc::c_int;
+    pub(crate) fn avutil_configuration() -> *mut libc::c_char;
     fn av_strerror(e: libc::c_int, b: *mut libc::c_char, s: libc::size_t) -> libc::c_int;
     fn av_dict_count(d: *const AVDictionary) -> libc::c_int;
     fn av_dict_get(

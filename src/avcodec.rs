@@ -11,6 +11,7 @@ use std::ptr;
 //#[link(name = "avcodec")]
 extern "C" {
     pub(crate) fn avcodec_version() -> libc::c_int;
+    pub(crate) fn avcodec_configuration() -> *mut libc::c_char;
     fn avcodec_alloc_context3(codec: *const AVCodec) -> *mut AVCodecContext;
     fn avcodec_decode_video2(
         ctx: *const AVCodecContext,

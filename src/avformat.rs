@@ -15,6 +15,7 @@ use std::ptr;
 //#[link(name = "avformat")]
 extern "C" {
     pub(crate) fn avformat_version() -> libc::c_int;
+    pub(crate) fn avformat_configuration() -> *mut libc::c_char;
 
     fn avformat_alloc_context() -> *mut AVFormatContext;
 

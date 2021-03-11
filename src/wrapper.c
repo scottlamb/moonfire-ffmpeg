@@ -8,6 +8,7 @@
 #include <libavformat/version.h>
 #include <libavutil/avutil.h>
 #include <libavutil/dict.h>
+#include <libavutil/ffversion.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/log.h>
 #include <libavutil/version.h>
@@ -21,6 +22,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+const char *moonfire_ffmpeg_version = FFMPEG_VERSION;
 
 const int moonfire_ffmpeg_compiled_libavcodec_version = LIBAVCODEC_VERSION_INT;
 const int moonfire_ffmpeg_compiled_libavformat_version = LIBAVFORMAT_VERSION_INT;

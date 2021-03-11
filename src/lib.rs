@@ -4,7 +4,12 @@
 use libc::{c_char, c_int};
 use log::info;
 use parking_lot::Once;
-use std::{convert::TryInto, ffi::CStr, fmt::{self, Write}, mem::MaybeUninit};
+use std::{
+    convert::TryInto,
+    ffi::CStr,
+    fmt::{self, Write},
+    mem::MaybeUninit,
+};
 
 static START: Once = Once::new();
 
@@ -21,14 +26,21 @@ type RustLogCallback = extern "C" fn(
     avc: *const libc::c_void,
     level: libc::c_int,
     fmt: *const c_char,
-    vl: *mut libc::c_void);
+    vl: *mut libc::c_void,
+);
 
 //#[link(name = "wrapper")]
 extern "C" {
+    static moonfire_ffmpeg_version: *const libc::c_char;
+
     fn moonfire_ffmpeg_init(cb: RustLogCallback);
 
-    fn moonfire_ffmpeg_vsnprintf(buf: *mut u8, size: usize,
-                                 fmt: *const c_char, vl: *mut libc::c_void) -> c_int;
+    fn moonfire_ffmpeg_vsnprintf(
+        buf: *mut u8,
+        size: usize,
+        fmt: *const c_char,
+        vl: *mut libc::c_void,
+    ) -> c_int;
 }
 
 pub struct Ffmpeg {}
@@ -61,14 +73,21 @@ struct Library {
     name: &'static str,
     compiled: Version,
     running: Version,
+    configuration: &'static CStr,
 }
 
 impl Library {
-    fn new(name: &'static str, compiled: libc::c_int, running: libc::c_int) -> Self {
+    fn new(
+        name: &'static str,
+        compiled: libc::c_int,
+        running: libc::c_int,
+        configuration: &'static CStr,
+    ) -> Self {
         Library {
             name,
             compiled: Version(compiled),
             running: Version(running),
+            configuration,
         }
     }
 
@@ -80,10 +99,12 @@ impl Library {
 
 impl fmt::Display for Library {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Write in the same order as ffmpeg's PRINT_LIB_INFO to reduce confusion:
+        // compiled, then running, then configuration.
         write!(
             f,
-            "{}: running={} compiled={}",
-            self.name, self.running, self.compiled
+            "{}: compiled={} running={} configuration={:?}",
+            self.name, self.compiled, self.running, self.configuration
         )
     }
 }
@@ -96,17 +117,24 @@ extern "C" fn log_callback(
     avc: *const libc::c_void,
     level: libc::c_int,
     fmt: *const c_char,
-    vl: *mut libc::c_void) {
+    vl: *mut libc::c_void,
+) {
     let log_level = avutil::convert_level(level);
 
     // Fast path so trace calls don't allocate when trace isn't enabled anywhere.
-    if log::max_level().to_level().map(|l| l < log_level).unwrap_or(true) {
+    if log::max_level()
+        .to_level()
+        .map(|l| l < log_level)
+        .unwrap_or(true)
+    {
         return;
     }
     let avc_item_name = if avc_item_name.is_null() {
         "null"
     } else {
-        unsafe { CStr::from_ptr(avc_item_name) }.to_str().unwrap_or("bad_utf8")
+        unsafe { CStr::from_ptr(avc_item_name) }
+            .to_str()
+            .unwrap_or("bad_utf8")
     };
     let target = format!("moonfire_ffmpeg::{}", avc_item_name);
     let metadata = log::Metadata::builder()
@@ -122,7 +150,8 @@ extern "C" fn log_callback(
         let ret = moonfire_ffmpeg_vsnprintf(buf[0].as_mut_ptr(), buf.len(), fmt, vl);
         std::slice::from_raw_parts_mut(
             buf[0].as_mut_ptr(),
-            std::cmp::min(ret.try_into().unwrap(), buf.len() - 1))
+            std::cmp::min(ret.try_into().unwrap(), buf.len() - 1),
+        )
     };
 
     // ffmpeg log lines apparently sometimes have these low-ASCII control characters.
@@ -139,36 +168,49 @@ extern "C" fn log_callback(
     // to come up much in practice. Just treat them all as individual log lines
     // for now, stripping off the trailing newline if it's present (usually).
     let mut buf: &[u8] = buf;
-    if buf.last().map(|&b| b == b'\r' || b == b'\n').unwrap_or(false) {
-        buf = &buf[0..buf.len()-1];
+    if buf
+        .last()
+        .map(|&b| b == b'\r' || b == b'\n')
+        .unwrap_or(false)
+    {
+        buf = &buf[0..buf.len() - 1];
     }
 
     let buf = String::from_utf8_lossy(buf);
-    logger.log(&log::RecordBuilder::new()
-        .args(format_args!("{:?}: {}", avc, buf))
-        .metadata(metadata)
-        .module_path(Some(&target))
-        .build());
+    logger.log(
+        &log::RecordBuilder::new()
+            .args(format_args!("{:?}: {}", avc, buf))
+            .metadata(metadata)
+            .module_path(Some(&target))
+            .build(),
+    );
 }
 
 impl Ffmpeg {
     pub fn new() -> Ffmpeg {
         START.call_once(|| unsafe {
+            // Initialize the lock and log callbacks before printing the libraries, because
+            // avutil_version() sometimes calls av_log().
+            moonfire_ffmpeg_init(log_callback);
+
             let libs = &[
                 Library::new(
                     "avutil",
                     avutil::moonfire_ffmpeg_compiled_libavutil_version,
                     avutil::avutil_version(),
+                    CStr::from_ptr(avutil::avutil_configuration()),
                 ),
                 Library::new(
                     "avcodec",
                     avcodec::moonfire_ffmpeg_compiled_libavcodec_version,
                     avcodec::avcodec_version(),
+                    CStr::from_ptr(avcodec::avcodec_configuration()),
                 ),
                 Library::new(
                     "avformat",
                     avformat::moonfire_ffmpeg_compiled_libavformat_version,
                     avformat::avformat_version(),
+                    CStr::from_ptr(avformat::avformat_configuration()),
                 ),
                 #[cfg(feature = "swscale")]
                 Library::new(
@@ -177,7 +219,11 @@ impl Ffmpeg {
                     swscale::swscale_version(),
                 ),
             ];
-            let mut msg = String::new();
+            let mut msg = format!(
+                "\ncompiled={:?} running={:?}",
+                CStr::from_ptr(moonfire_ffmpeg_version),
+                CStr::from_ptr(avutil::av_version_info())
+            );
             let mut compatible = true;
             for l in libs {
                 write!(&mut msg, "\n{}", l).unwrap();
@@ -189,7 +235,6 @@ impl Ffmpeg {
             if !compatible {
                 panic!("Incompatible ffmpeg versions:{}", msg);
             }
-            moonfire_ffmpeg_init(log_callback);
             avformat::av_register_all();
             if avformat::avformat_network_init() < 0 {
                 panic!("avformat_network_init failed");
@@ -228,6 +273,7 @@ mod tests {
                 "avutil",
                 (t.0 << 16) | (t.1 << 8) | t.2,
                 (t.3 << 16) | (t.4 << 8) | t.5,
+                std::ffi::CStr::from_bytes_with_nul(&[0]).unwrap(),
             );
             assert!(l.is_compatible() == t.6, "{} expected={}", l, t.6);
         }
