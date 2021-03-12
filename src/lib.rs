@@ -122,8 +122,9 @@ thread_local! {
 
 /// Appends the given `fmt` and `vl` to `buf` using `vsnprintf`.
 unsafe fn append_vprintf(buf: &mut Vec<u8>, fmt: *const libc::c_char, vl: *mut libc::c_void) {
-    let left = buf.capacity() - buf.len();
-    let ret = moonfire_ffmpeg_vsnprintf(buf.as_mut_ptr().add(buf.len()), left, fmt, vl);
+    let len = buf.len();
+    let left = buf.capacity() - len;
+    let ret = moonfire_ffmpeg_vsnprintf(buf.as_mut_ptr().add(len), left, fmt, vl);
     let ret = match usize::try_from(ret) {
         Ok(r) => r,
         Err(_) => {
@@ -135,13 +136,13 @@ unsafe fn append_vprintf(buf: &mut Vec<u8>, fmt: *const libc::c_char, vl: *mut l
         // Buffer is too small to put in the contents (with the trailing NUL,
         // which vsnprintf insists on). Now we know the correct size.
         buf.reserve(ret + 1);
-        let ret2 = moonfire_ffmpeg_vsnprintf(buf.as_mut_ptr_range().end, ret + 1, fmt, vl);
+        let ret2 = moonfire_ffmpeg_vsnprintf(buf.as_mut_ptr().add(len), ret + 1, fmt, vl);
         assert_eq!(
             usize::try_from(ret2).expect("2nd vsnprintf should succeed"),
             ret
         );
     }
-    buf.set_len(buf.len() + ret);
+    buf.set_len(len + ret);
 }
 
 /// Log callback which sends `av_log_default_callback`-like payloads into the
