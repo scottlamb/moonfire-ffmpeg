@@ -123,7 +123,7 @@ thread_local! {
 /// Appends the given `fmt` and `vl` to `buf` using `vsnprintf`.
 unsafe fn append_vprintf(buf: &mut Vec<u8>, fmt: *const libc::c_char, vl: *mut libc::c_void) {
     let left = buf.capacity() - buf.len();
-    let ret = moonfire_ffmpeg_vsnprintf(buf.as_mut_ptr_range().end, left, fmt, vl);
+    let ret = moonfire_ffmpeg_vsnprintf(buf.as_mut_ptr().add(buf.len()), left, fmt, vl);
     let ret = match usize::try_from(ret) {
         Ok(r) => r,
         Err(_) => {
