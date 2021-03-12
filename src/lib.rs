@@ -4,12 +4,9 @@
 use libc::{c_char, c_int};
 use log::info;
 use parking_lot::Once;
-use std::{
-    convert::TryInto,
-    ffi::CStr,
-    fmt::{self, Write},
-    mem::MaybeUninit,
-};
+use std::convert::TryFrom;
+use std::ffi::CStr;
+use std::fmt::{self, Write};
 
 static START: Once = Once::new();
 
@@ -109,6 +106,44 @@ impl fmt::Display for Library {
     }
 }
 
+// Thread-local buffer for av_log.
+//
+// ffmpeg's av_log calls aren't actually 1-1 with log messages. When it calls
+// it without a trailing newline, it's building up a log message for later.
+// ffmpeg doesn't use a thread-local buffer, so if two threads' messages overlap,
+// it will produce weird results. But we might as well do this properly.
+//
+// There's one other behavior difference: ffmpeg uses the info from the first
+// call of the message, where we use the last one. This avoids having to do
+// an extra allocation. It should be the same result.
+thread_local! {
+    static LOG_BUF: std::cell::RefCell<Vec<u8>> = std::cell::RefCell::new(Vec::with_capacity(1024));
+}
+
+/// Appends the given `fmt` and `vl` to `buf` using `vsnprintf`.
+unsafe fn append_vprintf(buf: &mut Vec<u8>, fmt: *const libc::c_char, vl: *mut libc::c_void) {
+    let left = buf.capacity() - buf.len();
+    let ret = moonfire_ffmpeg_vsnprintf(buf.as_mut_ptr_range().end, left, fmt, vl);
+    let ret = match usize::try_from(ret) {
+        Ok(r) => r,
+        Err(_) => {
+            buf.extend(b"(vsnprintf failed)");
+            return;
+        }
+    };
+    if ret >= left {
+        // Buffer is too small to put in the contents (with the trailing NUL,
+        // which vsnprintf insists on). Now we know the correct size.
+        buf.reserve(ret + 1);
+        let ret2 = moonfire_ffmpeg_vsnprintf(buf.as_mut_ptr_range().end, ret + 1, fmt, vl);
+        assert_eq!(
+            usize::try_from(ret2).expect("2nd vsnprintf should succeed"),
+            ret
+        );
+    }
+    buf.set_len(buf.len() + ret);
+}
+
 /// Log callback which sends `av_log_default_callback`-like payloads into the
 /// log crate, turning ffmpeg's `avc_item_name` into a module path and ffmpeg's
 /// levels into log crate levels.
@@ -145,14 +180,30 @@ extern "C" fn log_callback(
     if !logger.enabled(&metadata) {
         return;
     }
-    let mut buf: [MaybeUninit<u8>; 1024] = unsafe { MaybeUninit::uninit().assume_init() };
-    let buf = unsafe {
-        let ret = moonfire_ffmpeg_vsnprintf(buf[0].as_mut_ptr(), buf.len(), fmt, vl);
-        std::slice::from_raw_parts_mut(
-            buf[0].as_mut_ptr(),
-            std::cmp::min(ret.try_into().unwrap(), buf.len() - 1),
-        )
-    };
+
+    LOG_BUF.with(move |b| {
+        unsafe { log_callback_inner(&mut *b.borrow_mut(), logger, metadata, avc, fmt, vl) };
+    });
+}
+
+// Portion of log_callback_int that needs the thread-local data.
+unsafe fn log_callback_inner(
+    buf: &mut Vec<u8>,
+    logger: &dyn log::Log,
+    metadata: log::Metadata,
+    avc: *const libc::c_void,
+    fmt: *const c_char,
+    vl: *mut libc::c_void,
+) {
+    append_vprintf(buf, fmt, vl);
+
+    if !buf
+        .last()
+        .map(|&b| b == b'\r' || b == b'\n')
+        .unwrap_or(false)
+    {
+        return; // save for next time.
+    }
 
     // ffmpeg log lines apparently sometimes have these low-ASCII control characters.
     // av_log_default_callback "sanitizes" them; match its behavior.
@@ -162,28 +213,16 @@ extern "C" fn log_callback(
         }
     }
 
-    // av_log calls aren't quite one-to-one with log lines. If they don't have
-    // a trailing newline, the following call gets appended on the same line
-    // with no prefix. This is a not-very-threadsafe behavior and doesn't seem
-    // to come up much in practice. Just treat them all as individual log lines
-    // for now, stripping off the trailing newline if it's present (usually).
-    let mut buf: &[u8] = buf;
-    if buf
-        .last()
-        .map(|&b| b == b'\r' || b == b'\n')
-        .unwrap_or(false)
-    {
-        buf = &buf[0..buf.len() - 1];
-    }
-
-    let buf = String::from_utf8_lossy(buf);
+    let s = String::from_utf8_lossy(&buf[0..buf.len() - 1]);
+    let target = metadata.target();
     logger.log(
         &log::RecordBuilder::new()
-            .args(format_args!("{:?}: {}", avc, buf))
+            .args(format_args!("{:?}: {}", avc, &s))
             .metadata(metadata)
-            .module_path(Some(&target))
+            .module_path(Some(target))
             .build(),
     );
+    buf.clear();
 }
 
 impl Ffmpeg {
@@ -312,11 +351,31 @@ mod tests {
                 std::ptr::null(),
                 avutil::AV_LOG_INFO,
                 cstr!("foo %d\n").as_ptr(),
+                42 as i32,
+            );
+            avutil::av_log(
+                std::ptr::null(),
+                avutil::AV_LOG_INFO,
+                cstr!("partial ").as_ptr(),
                 1,
+            );
+            avutil::av_log(
+                std::ptr::null(),
+                avutil::AV_LOG_INFO,
+                cstr!("log\n").as_ptr(),
+                1,
+            );
+            avutil::av_log(
+                std::ptr::null(),
+                avutil::AV_LOG_INFO,
+                cstr!("bar\n").as_ptr(),
             );
         };
         let l = logger.0.lock();
-        assert_eq!(l.len(), 1);
-        assert_eq!(&l[0][..], "INFO: moonfire_ffmpeg::null: 0x0: foo 1");
+        println!("{:?}", &l[..]);
+        assert_eq!(l.len(), 3);
+        assert_eq!(&l[0][..], "INFO: moonfire_ffmpeg::null: 0x0: foo 42");
+        assert_eq!(&l[1][..], "INFO: moonfire_ffmpeg::null: 0x0: partial log");
+        assert_eq!(&l[2][..], "INFO: moonfire_ffmpeg::null: 0x0: bar");
     }
 }

@@ -132,20 +132,25 @@ static void log_callback(void *avcl, int level, const char *fmt, va_list vl) {
     // av_log_default_callback also looks up a parent, but it looks like that's
     // rarely supplied. Skip it for now.
 
-    struct my_va_list v;
-    va_copy(v.v, vl);
+    struct my_va_list copy;
+    va_copy(copy.v, vl);
+
     rust_log_callback(
         avc_item_name,
         avcl,
         level,
         fmt,
-        &v);
-    va_end(v.v);
+        &copy);
+    va_end(copy.v);
 }
 
 int moonfire_ffmpeg_vsnprintf(char *buf, size_t size, const char *fmt,
                               struct my_va_list *vl) {
-    return vsnprintf(buf, size, fmt, vl->v);
+    va_list tmp;
+    va_copy(tmp, vl->v);
+    int ret = vsnprintf(buf, size, fmt, tmp);
+    va_end(tmp);
+    return ret;
 }
 
 void moonfire_ffmpeg_init(RustLogCallback cb) {
