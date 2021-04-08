@@ -7,6 +7,7 @@ use std::ptr;
 //#[link(name = "swscale")]
 extern "C" {
     pub(crate) fn swscale_version() -> libc::c_int;
+    pub(crate) fn swscale_configuration() -> *mut libc::c_char;
 
     fn sws_getContext(
         src_w: libc::c_int,

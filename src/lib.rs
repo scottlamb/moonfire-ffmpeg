@@ -257,6 +257,7 @@ impl Ffmpeg {
                     "swscale",
                     swscale::moonfire_ffmpeg_compiled_libswscale_version,
                     swscale::swscale_version(),
+                    CStr::from_ptr(swscale::swscale_configuration()),
                 ),
             ];
             let mut msg = format!(
