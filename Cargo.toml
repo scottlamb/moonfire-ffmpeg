@@ -2,10 +2,14 @@
 name = "moonfire-ffmpeg"
 version = "0.0.1"
 authors = ["Scott Lamb <slamb@slamb.org>"]
-readme = "../README.md"
+description = "safe wrapper around select parts of ffmpeg"
+readme = "README.md"
+repository = "https://github.com/scottlamb/moonfire-ffmpeg"
 #links = "ffmpeg"
 edition = "2018"
 license = "MIT OR Apache-2.0"
+keywords = ["ffmpeg", "video"]
+categories = ["multimedia::video"]
 
 [features]
 swscale = []
