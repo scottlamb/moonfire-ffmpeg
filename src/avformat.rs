@@ -477,7 +477,7 @@ mod test {
         loop {
             let pkt = match ctx.read_frame() {
                 Err(e) if e.is_eof() => break,
-                Err(e) => panic!(e),
+                Err(e) => panic!("{}", e),
                 Ok(p) => p,
             };
             f(pkt);

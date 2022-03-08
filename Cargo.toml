@@ -1,6 +1,6 @@
 [package]
 name = "moonfire-ffmpeg"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Scott Lamb <slamb@slamb.org>"]
 description = "safe wrapper around select parts of ffmpeg"
 readme = "README.md"
@@ -10,6 +10,7 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 keywords = ["ffmpeg", "video"]
 categories = ["multimedia::video"]
+rust-version = "1.49.0"
 
 [features]
 swscale = []
@@ -17,7 +18,7 @@ swscale = []
 [dependencies]
 libc = "0.2.69"
 log = "0.4.8"
-parking_lot = { version = "0.11.1", features = [] }
+parking_lot = { version = "0.12.0", features = [] }
 
 [dev-dependencies]
 cstr = "0.2.5"
