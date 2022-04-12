@@ -1,11 +1,14 @@
 # moonfire-ffmpeg
 
+**Maintenance status:** inactive. May or may not become active again.
+
 A Rust wrapper around select parts of [ffmpeg](http://www.ffmpeg.org/) needed
 for Moonfire NVR:
 
-*   basic streaming: connecting to a RTSP stream. (Though eventually I want
-    Moonfire NVR to do this in pure Rust; see scottlamb/moonfire-nvr#37.)
-*   video analytics: decoding H.264 (likely also H.265 eventually; and
+*   ~~basic streaming: connecting to a RTSP stream.~~
+    Moonfire NVR now uses a pure-Rust RTSP library,
+    [Retina](https://crates.io/crates/retina).
+*   future video analytics: decoding H.264 (likely also H.265 eventually; and
     eventually with hardware acceleration), converting its colorspace to RGB,
     and downscaling it to feed to
     [moonfire-tflite](https://github.com/scottlamb/moonfire-tflite).
